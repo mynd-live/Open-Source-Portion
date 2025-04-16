@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cognitive System Visualization</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create nodes
+        const rootGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const rootMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const rootNode = new THREE.Mesh(rootGeometry, rootMaterial);
+        scene.add(rootNode);
+
+        // Define node configuration
+        const nodeConfig = [
+            { type: 'perception', color: 0xff0000, position: 0 },     // Red - Top
+            { type: 'reasoning', color: 0x00ff00, position: 1 },      // Green - Right
+            { type: 'memory', color: 0x0000ff, position: 2 },         // Blue - Bottom
+            { type: 'emotion', color: 0xff00ff, position: 3 }         // Purple - Left
+        ];
+
+        const moduleNodes = {};
+        const nodePositions = [];
+
+        // Create nodes
+        nodeConfig.forEach((config, index) => {
+            const angle = (index / nodeConfig.length) * Math.PI * 2;
+            const nodeGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const nodeMaterial = new THREE.MeshBasicMaterial({ color: config.color });
+            const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+            
+            const position = new THREE.Vector3(
+                Math.cos(angle) * 3,
+                Math.sin(angle) * 3,
+                0
+            );
+            node.position.copy(position);
+            nodePositions.push(position);
+            
+            scene.add(node);
+            moduleNodes[config.type] = node;
+
+            // Create connection to root
+            const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+            const points = [];
+            points.push(new THREE.Vector3(0, 0, 0));
+            points.push(node.position);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+        });
+
+        function createIntersectingArcs(start, end, intersectPoint, controlHeight, segments = 50) {
+            const points = [];
+            
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                
+                // Quadratic Bezier curve formula
+                const point = new THREE.Vector3();
+                const controlPoint = new THREE.Vector3(
+                    intersectPoint.x,
+                    intersectPoint.y + controlHeight,
+                    intersectPoint.z
+                );
+                
+                point.x = Math.pow(1-t, 2) * start.x + 2 * (1-t) * t * controlPoint.x + t * t * end.x;
+                point.y = Math.pow(1-t, 2) * start.y + 2 * (1-t) * t * controlPoint.y + t * t * end.y;
+                point.z = Math.pow(1-t, 2) * start.z + 2 * (1-t) * t * controlPoint.z + t * t * end.z;
+                
+                points.push(point);
+            }
+            
+            return points;
+        }
+
+        // Calculate midpoints for intersections
+        const midpointGreenPurple = new THREE.Vector3().addVectors(
+            nodePositions[0], 
+            nodePositions[2]
+        ).multiplyScalar(0.5);
+
+        const midpointRedBlue = new THREE.Vector3().addVectors(
+            nodePositions[1], 
+            nodePositions[3]
+        ).multiplyScalar(0.5);
+
+        // Create red-blue connections (intersecting at green-purple midpoint)
+        const redBluePoints1 = createIntersectingArcs(nodePositions[0], nodePositions[2], midpointGreenPurple, 2);
+        const redBluePoints2 = createIntersectingArcs(nodePositions[2], nodePositions[0], midpointGreenPurple, -2);
+
+        // Create purple-green connections (intersecting at red-blue midpoint)
+        const purpleGreenPoints1 = createIntersectingArcs(nodePositions[3], nodePositions[1], midpointRedBlue, 2);
+        const purpleGreenPoints2 = createIntersectingArcs(nodePositions[1], nodePositions[3], midpointRedBlue, -2);
+
+        // Create and add all curves
+        const curves = [
+            { points: redBluePoints1, color: 0xff6666 },    // Light red
+            { points: redBluePoints2, color: 0x6666ff },    // Light blue
+            { points: purpleGreenPoints1, color: 0xff66ff }, // Light purple
+            { points: purpleGreenPoints2, color: 0x66ff66 }  // Light green
+        ];
+
+        curves.forEach(curve => {
+            const geometry = new THREE.BufferGeometry().setFromPoints(curve.points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: curve.color,
+                opacity: 0.7,
+                transparent: true
+            });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+        });
+
+        // Position camera
+        camera.position.z = 10;
+
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Gentle rotation of the entire scene
+            scene.rotation.z += 0.002;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resizing
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
